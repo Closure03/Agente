@@ -6,6 +6,7 @@ Python puro. No conoce nada de Streamlit: puede usarse desde un notebook, la con
 
 
 from base_conocimiento import REGLAS, PREDICADOS, MARCAS, CONTRADICCIONES, texto
+from catalogo_modelos import MODELOS, hechos_del_modelo, sintoma_aplica, bloqueos_del_modelo
 
 
 
@@ -32,15 +33,18 @@ def una_pasada(base, sintomas):
     return hechos
 
 
-def hechos_de_entrada(sintomas, marca=""):
-    """Convierte síntomas + marca elegida en el conjunto inicial de hechos."""
+def hechos_de_entrada(sintomas, marca="", modelo=""):
+    """Convierte síntomas + marca + modelo elegidos en el conjunto inicial de hechos."""
     hechos = set(sintomas)
+    if modelo and modelo in MODELOS:
+        marca = MODELOS[modelo]["marca"]          # el modelo implica la marca
+        hechos |= hechos_del_modelo(modelo)
     if marca:
         hechos.add("marca_" + marca)
     return hechos
 
 
-def validar_entrada(sintomas, marca=""):
+def validar_entrada(sintomas, marca="", modelo=""):
     """Devuelve una lista de mensajes de error (vacía si todo está bien)."""
     errores = []
     if len(sintomas) == 0:
@@ -50,13 +54,23 @@ def validar_entrada(sintomas, marca=""):
             errores.append(f"'{s}' no es un síntoma conocido.")
     if marca and marca not in MARCAS:
         errores.append(f"La marca '{marca}' no existe en el sistema.")
+    if modelo:
+        if modelo not in MODELOS:
+            errores.append(f"El modelo '{modelo}' no existe en el catálogo.")
+        else:
+            nombre = MARCAS[MODELOS[modelo]["marca"]][0] + " " + MODELOS[modelo]["nombre"]
+            if marca and MODELOS[modelo]["marca"] != marca:
+                errores.append(f"El modelo {nombre} no pertenece a la marca '{marca}'.")
+            for s in sorted(sintomas):
+                if s in PREDICADOS and PREDICADOS[s][0] == "sintoma" and not sintoma_aplica(s, modelo):
+                    errores.append(f"El síntoma '{texto(s)}' no aplica a {nombre}.")
     for a, b in CONTRADICCIONES:
         if a in sintomas and b in sintomas:
             errores.append(f"Síntomas contradictorios: '{texto(a)}' y '{texto(b)}'.")
     return errores
 
 
-def encadenamiento_adelante(base, hechos_iniciales, registro=None):
+def encadenamiento_adelante(base, hechos_iniciales, registro=None, bloqueados=None):
     """
     Aplica encadenamiento hacia adelante.
     Returns: (hechos_finales, reglas_aplicadas)
@@ -66,6 +80,8 @@ def encadenamiento_adelante(base, hechos_iniciales, registro=None):
     """
     if registro is None:
         registro = []
+    if bloqueados is None:
+        bloqueados = set()   # conclusiones que el modelo no permite derivar
     hechos = set(hechos_iniciales)
     certeza = {h: 1.0 for h in hechos}      # síntomas y marca tienen certeza 1
     reglas_aplicadas = []
@@ -78,7 +94,8 @@ def encadenamiento_adelante(base, hechos_iniciales, registro=None):
         registro.append(f"--- Pasada {pasada} ---")
         hubo_cambios = False
         for regla in base:
-            if se_cumple(regla, hechos) and regla["entonces"] not in hechos:
+            if (se_cumple(regla, hechos) and regla["entonces"] not in hechos
+                    and regla["entonces"] not in bloqueados):
                 c = min(certeza[x] for x in regla["si"]) * regla["certeza"]
                 certeza[regla["entonces"]] = c
                 hechos.add(regla["entonces"])
@@ -93,12 +110,18 @@ def encadenamiento_adelante(base, hechos_iniciales, registro=None):
     return hechos, reglas_aplicadas
 
 
-def diagnosticar(sintomas, marca="", registro=None):
+def razonar(sintomas, marca="", modelo="", registro=None):
+    """Razona SIN validar la entrada (uso interno: pruebas y exploración masiva)."""
+    return encadenamiento_adelante(REGLAS, hechos_de_entrada(sintomas, marca, modelo), registro,
+                                   bloqueos_del_modelo(modelo))
+
+
+def diagnosticar(sintomas, marca="", modelo="", registro=None):
     """Valida la entrada y ejecuta el motor. Lanza ValueError si la entrada es inválida."""
-    errores = validar_entrada(sintomas, marca)
+    errores = validar_entrada(sintomas, marca, modelo)
     if errores:
         raise ValueError(" ".join(errores))
-    return encadenamiento_adelante(REGLAS, hechos_de_entrada(sintomas, marca), registro)
+    return razonar(sintomas, marca, modelo, registro)
 
 
 def explicar_razonamiento(reglas_aplicadas):
@@ -130,20 +153,22 @@ def porque(conclusion, hechos_iniciales, reglas_aplicadas, nivel=0):
     return f"{sangria}{conclusion} .- no se pudo derivar\n"
 
 
-def que_falta(base, hechos, limite=6):
+def que_falta(base, hechos, limite=6, bloqueados=None):
     """
     Para cada regla no disparada con evidencia parcial indica qué condiciones faltan.
-    Se ignoran las reglas de marcas distintas a la elegida y las evidencias que son solo la marca.
+    Se ignoran las evidencias que son solo contexto (marca, modelo, atributos), las reglas cuyo
+    contexto no se cumple y las conclusiones bloqueadas por el modelo.
     """
+    bloqueados = bloqueados or set()
     faltantes = []
     for regla in base:
-        if regla["entonces"] in hechos:
+        if regla["entonces"] in hechos or regla["entonces"] in bloqueados:
             continue
-        presentes = [c for c in regla["si"] if c in hechos and not c.startswith("marca_")]
+        presentes = [c for c in regla["si"] if c in hechos and PREDICADOS[c][0] != "contexto"]
         ausentes = [c for c in regla["si"] if c not in hechos]
         if not presentes or not ausentes:
             continue
-        if any(c.startswith("marca_") for c in ausentes):
+        if any(PREDICADOS[c][0] == "contexto" for c in ausentes):
             continue
         faltantes.append((regla["nombre"], regla["entonces"], ausentes))
     faltantes.sort(key=lambda f: len(f[2]))

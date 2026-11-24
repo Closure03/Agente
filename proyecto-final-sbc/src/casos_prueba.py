@@ -1,12 +1,12 @@
 """Casos de prueba del sistema experto (datos + ejecutor). Python puro."""
 from base_conocimiento import REGLAS
-from motor_inferencia import encadenamiento_adelante, hechos_de_entrada, validar_entrada
+from motor_inferencia import razonar, validar_entrada
 
 # VALIDACIÓN 2 · Casos de prueba diseñados a mano
 CASOS = []
 
-def caso(desc, sintomas, debe=(), no_debe=(), marca="", error=False):
-    CASOS.append({"caso": len(CASOS) + 1, "desc": desc, "marca": marca, "sintomas": set(sintomas),
+def caso(desc, sintomas, debe=(), no_debe=(), marca="", error=False, modelo=""):
+    CASOS.append({"caso": len(CASOS) + 1, "desc": desc, "marca": marca, "modelo": modelo, "sintomas": set(sintomas),
                   "debe": set(debe), "no_debe": set(no_debe), "error": error})
 
 # ---------- Eléctrico y encendido ----------
@@ -130,22 +130,75 @@ caso("KTM · escenario complejo (carga + calor + válvulas + frenos)",
      ["regulador_rectificador_ktm", "regulador_rectificador_danado", "ventilacion_trafico_ktm", "fuga_refrigerante",
       "valvulas_fuera_de_rango_ktm", "fuga_circuito_frenos", "alerta_frenos"], ["correas_desmo_ducati"], marca="ktm")
 
+# ---------- Modelos: atributos del modelo, síntomas que no aplican y bloqueos ----------
+caso("Modelo · KTM 390 Duke pierde carga", ["bateria_se_descarga", "luces_debiles_en_marcha"],
+     ["regulador_rectificador_ktm"], ["regulador_ducati"], modelo="ktm_390_duke")
+caso("Modelo · NMAX (scooter): variador", ["vibracion_al_arrancar_scooter", "ruido_variador"],
+     ["variador_cvt_desgastado", "recomendar_variador_cvt_desgastado"], ["kit_arrastre_desgastado", "variador_honda"], modelo="yamaha_nmax_155")
+caso("Modelo · NMAX con síntoma de cadena (no aplica)", ["ruido_cadena"], error=True, modelo="yamaha_nmax_155")
+caso("Modelo · PCX: el scooter patina", ["scooter_patina_al_acelerar"], ["correa_cvt_desgastada"], [], modelo="honda_pcx")
+caso("Modelo · PCX: variador (regla Honda)", ["vibracion_al_arrancar_scooter", "ruido_variador"],
+     ["variador_honda", "variador_cvt_desgastado"], [], modelo="honda_pcx")
+caso("Modelo · PCX con embrague manual (no aplica)", ["embrague_patina"], error=True, modelo="honda_pcx")
+caso("Modelo · BMW R 1250 GS (cardán): ruido y fuga", ["ruido_transmision_cardan", "fuga_aceite"],
+     ["cardan_con_fuga_o_desgaste", "fuga_transmision_final_bmw"], ["kit_arrastre_desgastado"], modelo="bmw_r_1250_gs")
+caso("Modelo · BMW R 1250 GS con cadena (no aplica)", ["ruido_cadena"], error=True, modelo="bmw_r_1250_gs")
+caso("Modelo · BMW F 850 GS (cadena): una fuga no es del cardán", ["fuga_aceite"],
+     [], ["fuga_transmision_final_bmw", "cardan_con_fuga_o_desgaste"], modelo="bmw_f_850_gs")
+caso("Modelo · BMW F 850 GS: kit de arrastre", ["ruido_cadena", "cadena_floja"], ["kit_arrastre_desgastado"], [], modelo="bmw_f_850_gs")
+caso("Modelo · Harley Fat Boy (correa)", ["correa_final_desgastada"],
+     ["correa_transmision_desgastada", "recomendar_correa_transmision_desgastada"], ["kit_arrastre_desgastado"], modelo="harley_fat_boy")
+caso("Modelo · Harley Iron 883: tensores de levas", ["ruido_cadena_distribucion"], ["tensores_levas_harley"], [], modelo="harley_iron_883")
+caso("Modelo · Scrambler 800 (aire) se calienta en tráfico", ["sobrecalentamiento", "falla_en_trafico_lento"],
+     ["calentamiento_motor_aire_trafico", "calor_cilindro_trasero_ducati"], ["falla_ventilador"], modelo="ducati_scrambler_800")
+caso("Modelo · Scrambler 800 sin radiador (refrigerante no aplica)", ["nivel_refrigerante_bajo"], error=True, modelo="ducati_scrambler_800")
+caso("Modelo · Panigale V4 (líquida) se calienta en tráfico", ["sobrecalentamiento", "falla_en_trafico_lento"],
+     ["calor_cilindro_trasero_ducati"], ["calentamiento_motor_aire_trafico"], modelo="ducati_panigale_v4")
+caso("Modelo · KLX 230 (aire): termostato Kawasaki bloqueado", ["sobrecalentamiento", "falla_en_trafico_lento"],
+     ["calentamiento_motor_aire_trafico"], ["termostato_ventilador_kawasaki"], modelo="kawasaki_klx_230")
+caso("Modelo · KLX 230 con ventilador (no aplica)", ["ventilador_no_gira"], error=True, modelo="kawasaki_klx_230")
+caso("Modelo · Z650 (líquida): termostato Kawasaki", ["sobrecalentamiento", "falla_en_trafico_lento"],
+     ["termostato_ventilador_kawasaki"], ["calentamiento_motor_aire_trafico"], modelo="kawasaki_z650")
+caso("Modelo · Tiger 900: fuga de refrigerante", ["sobrecalentamiento", "nivel_refrigerante_bajo"],
+     ["fuga_refrigerante", "fuga_refrigerante_triumph"], [], modelo="triumph_tiger_900")
+caso("Modelo · F 850 GS: aceite lechoso + refrigerante bajo", ["aceite_lechoso", "nivel_refrigerante_bajo"],
+     ["fuga_interna_refrigerante"], ["empaque_culata_danado"], modelo="bmw_f_850_gs")
+caso("Modelo · GN 125 (carburador) con gasolina vieja", ["ralenti_inestable", "gasolina_vieja"],
+     ["carburador_sucio_carburado", "carburacion_suzuki"], [], modelo="suzuki_gn_125")
+caso("Modelo · GN 125 con check engine (carburador, no aplica)", ["testigo_check_engine"], error=True, modelo="suzuki_gn_125")
+caso("Modelo · Yamaha R15: tensor de distribución", ["ruido_cadena_distribucion"],
+     ["tensor_distribucion_r15", "tensor_distribucion_yamaha"], [], modelo="yamaha_r15")
+caso("Modelo · Yamaha MT-07: tensor (no es la regla de la R15)", ["ruido_cadena_distribucion"],
+     ["tensor_distribucion_yamaha"], ["tensor_distribucion_r15"], modelo="yamaha_mt_07")
+caso("Modelo · Aprilia RSV4: ride-by-wire", ["ralenti_inestable", "testigo_check_engine"],
+     ["sensor_acelerador_aprilia"], [], modelo="aprilia_rsv4_1100")
+caso("Modelo · Honda CB190R: embrague", ["embrague_patina", "perdida_potencia"], ["embrague_desgastado"], [], modelo="honda_cb190r")
+caso("Error: modelo de otra marca", ["tirones"], marca="ducati", error=True, modelo="ktm_390_duke")
+caso("Error: modelo inexistente", ["tirones"], error=True, modelo="ktm_inexistente")
+caso("Modelo · KTM 790 Duke, escenario complejo",
+     ["bateria_se_descarga", "luces_debiles_en_marcha", "olor_quemado_electrico", "sobrecalentamiento",
+      "falla_en_trafico_lento", "nivel_refrigerante_bajo", "servicio_valvulas_vencido", "perdida_potencia",
+      "freno_esponjoso", "nivel_liquido_bajo", "ruido_cadena", "cadena_floja"],
+     ["regulador_rectificador_ktm", "ventilacion_trafico_ktm", "fuga_refrigerante", "valvulas_fuera_de_rango_ktm",
+      "fuga_circuito_frenos", "alerta_frenos", "kit_arrastre_desgastado"], ["correa_cvt_desgastada"], modelo="ktm_790_duke")
+
 
 
 def ejecutar_casos():
     """Ejecuta todos los casos y devuelve una lista de resultados comparados con lo esperado."""
     resultados = []
     for c in CASOS:
-        errores = validar_entrada(c["sintomas"], c["marca"])
+        errores = validar_entrada(c["sintomas"], c["marca"], c["modelo"])
         if c["error"]:
             ok = len(errores) > 0
             reglas, faltan, sobran = [], set(), set()
         else:
-            hechos, aplicadas = encadenamiento_adelante(REGLAS, hechos_de_entrada(c["sintomas"], c["marca"]))
+            hechos, aplicadas = razonar(c["sintomas"], c["marca"], c["modelo"])
             faltan = c["debe"] - hechos
             sobran = c["no_debe"] & hechos
             ok = (not errores) and not faltan and not sobran
             reglas = [a["nombre"] for a in aplicadas]
-        resultados.append({"caso": c["caso"], "desc": c["desc"], "marca": c["marca"], "reglas": reglas,
-                           "faltan": sorted(faltan), "sobran": sorted(sobran), "error_esperado": c["error"], "ok": ok})
+        resultados.append({"caso": c["caso"], "desc": c["desc"], "marca": c["marca"], "modelo": c["modelo"],
+                           "reglas": reglas, "faltan": sorted(faltan), "sobran": sorted(sobran),
+                           "error_esperado": c["error"], "ok": ok})
     return resultados

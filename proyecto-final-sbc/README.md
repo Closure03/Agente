@@ -4,10 +4,16 @@ Sistema basado en conocimiento con **encadenamiento hacia adelante** e interfaz 
 Recibe síntomas (y opcionalmente la marca: KTM, Aprilia, BMW, Ducati, Triumph, Yamaha, Honda, Kawasaki, Suzuki, Harley-Davidson)
 y entrega alertas de seguridad, diagnósticos, recomendaciones con nivel de certeza y la cadena de razonamiento (**¿Por qué?**).
 
-- 147 reglas · 61 síntomas · 68 diagnósticos (37 generales + 31 por marca) · 4 alertas · 10 marcas
-- 78 casos de prueba + una prueba por regla + 56.000 escenarios explorados automáticamente
+- 161 reglas · 64 síntomas · 75 diagnósticos · 4 alertas · 10 marcas · **49 modelos** con catálogo e imagen de referencia
+- 107 casos de prueba + una prueba por regla + casi 150.000 escenarios explorados automáticamente (incluye todos los modelos)
 
 > Las fallas por marca son hipótesis de taller: confirmar con el manual de servicio y los llamados a revisión (recall) del fabricante.
+
+## 0. Qué hace el modelo
+- Elegir **marca** muestra su **catálogo de modelos** con imagen; al elegir un **modelo** se ocultan los síntomas que no aplican a su ficha
+  (cadena en un scooter, refrigerante en un motor enfriado por aire...), se descartan diagnósticos incompatibles y se activan reglas
+  que dependen de sus atributos (transmisión, refrigeración, alimentación) o del modelo concreto.
+- Las imágenes son **ilustraciones de referencia**; para fotos reales ver `assets/modelos/LEEME.md`.
 
 ## 1. Requisitos
 | Componente | Requisito |
@@ -58,10 +64,12 @@ proyecto-final-sbc/
 ├── .streamlit/config.toml        # tema y modo headless
 ├── src/
 │   ├── base_conocimiento.py      # marcas, predicados y reglas (Python puro)
+│   ├── catalogo_modelos.py       # 49 modelos, atributos, imagen SVG, bloqueos (Python puro)
 │   ├── motor_inferencia.py       # encadenamiento hacia adelante, porque(), que_falta()... (Python puro)
 │   ├── casos_prueba.py           # casos de prueba (datos + ejecutor)
 │   ├── validacion.py             # cobertura por regla y exploración de escenarios
 │   └── app.py                    # interfaz Streamlit (única que importa streamlit)
+├── assets/modelos/               # fotos opcionales <id>.jpg (ver LEEME.md)
 ├── tests/
 │   ├── test_sbc.py
 │   └── casos_prueba.md

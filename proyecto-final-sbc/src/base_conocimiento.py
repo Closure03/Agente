@@ -4,6 +4,8 @@ Python puro (sin librerías). Los hechos son textos; una regla es un diccionario
 "si" (condiciones) y "entonces" (conclusión), igual que en el notebook de ejemplo.
 """
 
+from catalogo_modelos import MODELOS, ATRIBUTOS
+
 
 # Marcas del taller: clave -> (nombre, país, modelos de ejemplo)
 MARCAS = {
@@ -349,14 +351,47 @@ regla("Harley con fuga de aceite: fuga típica", ["marca_harley", "fuga_aceite"]
 regla("Aceite, filtro de aire y bujía en mal estado: servicio mayor",
       ["necesita_cambio_aceite", "filtro_aire_obstruido", "bujia_danada"], "recomendar_servicio_mayor", 0.85)
 
+
+# ======================================================================================
+# AMPLIACIÓN · MODELOS: síntomas, diagnósticos, hechos de contexto y reglas que dependen del modelo
+# ======================================================================================
+g = "Transmisión y embrague"
+sintoma("scooter_patina_al_acelerar", g, "El scooter acelera el motor pero avanza poco")
+sintoma("correa_final_desgastada", g, "Correa de transmisión con grietas, desgaste o ruido")
+sintoma("ruido_transmision_cardan", g, "Zumbido o golpe seco en la transmisión final (cardán)")
+
+diagnostico("correa_cvt_desgastada", "Correa del CVT desgastada (scooter)", "Medir y cambiar la correa, revisar rodillos y el embrague centrífugo")
+diagnostico("correa_transmision_desgastada", "Correa de transmisión final desgastada", "Medir tensión y alineación; cambiar la correa si hay grietas o dientes dañados")
+diagnostico("cardan_con_fuga_o_desgaste", "Transmisión por cardán con fuga o desgaste", "Revisar nivel de aceite y retenes del cardán; inspeccionar juntas")
+diagnostico("calentamiento_motor_aire_trafico", "Motor refrigerado por aire que se calienta en tráfico", "Revisar nivel y viscosidad del aceite, aletas limpias y evitar ralentí prolongado")
+diagnostico("carburador_sucio_carburado", "Carburador sucio en moto carburada", "Desarmar y limpiar el carburador (surtidores y cuba) y reajustar el ralentí")
+diagnostico("fuga_interna_refrigerante", "Posible mezcla interna de aceite y refrigerante", "Prueba de presión del sistema y de compresión; revisar empaque de culata y sello de la bomba de agua")
+diagnostico("tensor_distribucion_r15", "Tensor de distribución típico de la R15 (Yamaha)", "Cambiar el tensor de la cadena de distribución y verificar el ajuste", "yamaha")
+
+# Hechos de contexto: cada modelo y cada atributo (transmisión, refrigeración, alimentación, tipo)
+for _mid, _m in MODELOS.items():
+    PREDICADOS["modelo_" + _mid] = ("contexto", "Modelo", MARCAS[_m["marca"]][0] + " " + _m["nombre"], None, _m["marca"])
+for _hecho, _txt in ATRIBUTOS.items():
+    PREDICADOS[_hecho] = ("contexto", "Atributo del modelo", _txt, None, None)
+
+# ---------- Reglas que dependen del modelo (sus atributos o el modelo mismo) ----------
+regla("Scooter que acelera sin avanzar: correa CVT", ["scooter_patina_al_acelerar"], "correa_cvt_desgastada", 0.80)
+regla("Correa final con desgaste: correa de transmisión", ["correa_final_desgastada"], "correa_transmision_desgastada", 0.90)
+regla("Cardán con ruido y fuga de aceite", ["ruido_transmision_cardan", "fuga_aceite"], "cardan_con_fuga_o_desgaste", 0.85)
+regla("Motor refrigerado por aire que se calienta en tráfico",
+      ["refrigeracion_aire", "sobrecalentamiento", "falla_en_trafico_lento"], "calentamiento_motor_aire_trafico", 0.80)
+regla("Moto con carburador, ralentí inestable y gasolina vieja",
+      ["alimentacion_carburador", "ralenti_inestable", "gasolina_vieja"], "carburador_sucio_carburado", 0.85)
+regla("Motor con refrigeración líquida: aceite lechoso y refrigerante bajo",
+      ["refrigeracion_liquida", "aceite_lechoso", "nivel_refrigerante_bajo"], "fuga_interna_refrigerante", 0.85)
+regla("Yamaha R15 con traqueteo en la parte alta", ["modelo_yamaha_r15", "ruido_cadena_distribucion"], "tensor_distribucion_r15", 0.90)
+
 # ---------- Recomendaciones automáticas: una por cada diagnóstico ----------
 for nombre_pred, datos in list(PREDICADOS.items()):
     if datos[0] == "diagnostico":
         rec = "recomendar_" + nombre_pred
         PREDICADOS[rec] = ("recomendacion", "Recomendación", datos[3], None, datos[4])
         regla("Acción para: " + datos[2], [nombre_pred], rec, 0.95)
-
-
 
 # Nombre usado en la actividad (from base_conocimiento import REGLAS, PREDICADOS)
 REGLAS = base_conocimiento
